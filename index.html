@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>PT Manager</title>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--text:#17202a;--muted:#667085;--line:#e5e7eb;--blue:#2563eb;--green:#15803d;--orange:#b45309;--red:#b91c1c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+.app{max-width:1050px;margin:auto;padding-bottom:80px}header{padding:24px 18px 8px;display:flex;justify-content:space-between;align-items:center}.brand{font-size:25px;font-weight:800}.brand span{color:var(--blue)}
+main{padding:12px 18px}.top{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:12px 0 18px}h1,h2,h3,p{margin-top:0}.muted{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat,.card{background:var(--card);border:1px solid var(--line);border-radius:16px}.stat{padding:18px}.stat b{font-size:28px;display:block}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 12px}input{border:1px solid var(--line);background:white;border-radius:10px;padding:11px;font:inherit}.search{flex:1;min-width:220px}
+.btn{border:0;border-radius:10px;padding:11px 15px;font:700 14px inherit;cursor:pointer;background:#eef2f7}.primary{background:var(--blue);color:white}.danger{background:#fee2e2;color:#991b1b}.small{padding:8px 10px}
+.clients{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.client{padding:17px;cursor:pointer}.client:hover{box-shadow:0 8px 25px #00000010}.row{display:flex;align-items:center;gap:12px}.between{justify-content:space-between}.avatar{width:44px;height:44px;border-radius:12px;background:#dbeafe;color:#1d4ed8;display:grid;place-items:center;font-weight:800}.name{font-weight:800;font-size:17px}.badge{padding:5px 8px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}.active{background:#dcfce7;color:#166534}.soon{background:#fef3c7;color:#92400e}.expired{background:#fee2e2;color:#991b1b}.meta{margin:13px 0}.actions{display:flex;gap:7px;flex-wrap:wrap}.notice{padding:13px 15px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;margin-bottom:15px}
+.panel{padding:20px}.detail{display:flex;justify-content:space-between;gap:15px}.tabs{display:flex;gap:8px;overflow:auto;margin:18px 0}.exercise{border:1px solid var(--line);border-radius:12px;padding:13px;margin-top:9px}.exercise b{display:block}.empty{text-align:center;padding:45px 20px;color:var(--muted)}
+.modal{position:fixed;inset:0;background:#11182766;display:none;align-items:flex-end;justify-content:center;z-index:20}.modal.open{display:flex}.sheet{background:white;width:min(620px,100%);padding:22px;border-radius:20px 20px 0 0}.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}.form .full{grid-column:1/-1}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+nav{position:fixed;bottom:0;left:0;right:0;background:#ffffffed;border-top:1px solid var(--line);display:flex;justify-content:center;z-index:10}nav button{border:0;background:none;padding:13px 18px;color:var(--muted);font-weight:700}nav .on{color:var(--blue)}
+@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}.clients{grid-template-columns:1fr}.top,.detail{align-items:stretch;flex-direction:column}.form{grid-template-columns:1fr}.form .full{grid-column:auto}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div class="brand">PT <span>Manager</span></div><div class="muted">V1</div></header>
+<main id="main"></main>
+</div>
+<nav id="nav"></nav>
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+
+<script>
+const KEY="pt_manager_v1";
+let db=JSON.parse(localStorage.getItem(KEY)||"null")||{
+ clients:[
+ {id:1,name:"Marco Rossi",email:"marco@example.com",plan:"Ipertrofia",start:"2026-10-01",end:"2026-10-31",
+ days:[{name:"Giorno 1",focus:"Petto + Bicipiti",ex:[["Chest Press","3 × 7-9"],["Curl bilanciere","3 × 7-9"],["Croci ai cavi","3 × 8-10"]]},
+ {name:"Giorno 2",focus:"Gambe + Spalle",ex:[["Squat multipower","3 × 7-9"],["Lento avanti","3 × 7-10"],["Calf press","3 × 8-12"]]}]},
+ {id:2,name:"Luca Bianchi",email:"luca@example.com",plan:"Ricondizionamento",start:"2026-09-10",end:"2026-10-10",
+ days:[{name:"Giorno 1",focus:"Full Body",ex:[["Leg Press","3 × 10"],["Chest Press","3 × 10"],["Lat Machine","3 × 10"]]}]},
+ {id:3,name:"Andrea Verdi",email:"andrea@example.com",plan:"Forza",start:"2026-09-01",end:"2026-09-30",
+ days:[{name:"Giorno 1",focus:"Lower",ex:[["Squat","4 × 5"],["Romanian Deadlift","3 × 6"],["Calf","3 × 10"]]}]}
+]};
+let view="dashboard", selected=null;
+
+function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function fmt(s){return new Date(s+"T12:00:00").toLocaleDateString("it-IT")}
+function left(s){return Math.ceil((new Date(s+"T23:59:59")-new Date())/86400000)}
+function stat(c){let d=left(c.end);return d<0?["expired","Scaduta"]:d<=7?["soon",`Scade tra ${d} giorni`]:["active",`Attiva · ${d} giorni`]}
+function initials(n){return n.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}
+
+function card(c){
+ const [cls,label]=stat(c);
+ return `<div class="card client" onclick="openClient(${c.id})">
+ <div class="row between"><div class="row"><div class="avatar">${initials(c.name)}</div><div><div class="name">${c.name}</div><div class="muted">${c.plan}</div></div></div><span class="badge ${cls}">${label}</span></div>
+ <div class="meta muted">Scheda: ${fmt(c.start)} → ${fmt(c.end)}<br>${c.days.length} ${c.days.length===1?"giorno":"giorni"} programmati</div>
+ <div class="actions"><button class="btn small" onclick="event.stopPropagation();editClient(${c.id})">Modifica</button><button class="btn small" onclick="event.stopPropagation();openClient(${c.id})">Apri</button></div></div>`;
+}
+
+function dashboard(){
+ let a=0,s=0,e=0;db.clients.forEach(c=>{let x=stat(c)[0];x==="active"?a++:x==="soon"?s++:e++});
+ return `<div class="top"><div><h1>Dashboard</h1><p class="muted">Clienti, schede e scadenze in un'unica schermata.</p></div><button class="btn primary" onclick="newClient()">＋ Nuovo cliente</button></div>
+ ${s+e?`<div class="notice">⚠️ <b>${s+e} schede</b> richiedono attenzione.</div>`:""}
+ <div class="grid"><div class="stat"><span class="muted">Clienti</span><b>${db.clients.length}</b></div><div class="stat"><span class="muted">Attive</span><b>${a}</b></div><div class="stat"><span class="muted">In scadenza</span><b>${s}</b></div><div class="stat"><span class="muted">Scadute</span><b>${e}</b></div></div>
+ <div class="toolbar"><input id="search" class="search" placeholder="🔍 Cerca cliente..." oninput="renderClients()"></div><div id="clients" class="clients"></div>`;
+}
+function renderClients(){let el=document.getElementById("clients");if(!el)return;let q=(document.getElementById("search")?.value||"").toLowerCase();let a=db.clients.filter(c=>c.name.toLowerCase().includes(q));el.innerHTML=a.length?a.map(card).join(""):`<div class="card empty">Nessun cliente trovato.</div>`}
+
+function clientPage(c){
+ const [cls,label]=stat(c);
+ return `<div class="top"><button class="btn" onclick="goDashboard()">← Clienti</button></div>
+ <div class="card panel"><div class="detail"><div class="row"><div class="avatar">${initials(c.name)}</div><div><h2>${c.name}</h2><p class="muted">${c.email||"Nessuna email"}</p><span class="badge ${cls}">${label}</span></div></div>
+ <div class="actions"><button class="btn" onclick="editClient(${c.id})">Modifica cliente</button><button class="btn primary" onclick="editPlan(${c.id})">✏️ Modifica scheda</button></div></div>
+ <div class="tabs"><button class="btn" onclick="tab('plan')">📋 Scheda</button><button class="btn" onclick="tab('history')">📅 Storico</button><button class="btn" onclick="tab('progress')">📊 Progressi</button></div>
+ <div id="tab"></div></div>`;
+}
+function tab(t){
+ let c=db.clients.find(x=>x.id===selected),el=document.getElementById("tab");
+ if(t==="plan")el.innerHTML=`<h3>${c.plan}</h3><p class="muted">Valida dal ${fmt(c.start)} al ${fmt(c.end)}</p>${c.days.map(d=>`<div><h3>${d.name} · ${d.focus}</h3>${d.ex.map(e=>`<div class="exercise"><b>${e[0]}</b><span class="muted">${e[1]}</span></div>`).join("")}</div>`).join("")||`<div class="empty">Nessun esercizio programmato.</div>`}`;
+ if(t==="history")el.innerHTML=`<h3>Storico · ${c.name}</h3><div class="empty">Qui verranno mostrati gli allenamenti del singolo cliente, separati per data.</div>`;
+ if(t==="progress")el.innerHTML=`<h3>Progressi · ${c.name}</h3><div class="grid"><div class="stat"><span class="muted">Allenamenti</span><b>—</b></div><div class="stat"><span class="muted">Peso</span><b>—</b></div><div class="stat"><span class="muted">Volume</span><b>—</b></div><div class="stat"><span class="muted">PR</span><b>—</b></div></div><div class="empty">I dati saranno collegati allo storico nella prossima versione.</div>`;
+}
+function openClient(id){selected=id;view="client";render();tab("plan")}
+function goDashboard(){view="dashboard";render()}
+function newClient(){modal("Nuovo cliente",{name:"",email:"",plan:"Nuova scheda",start:new Date().toISOString().slice(0,10),end:new Date(Date.now()+30*86400000).toISOString().slice(0,10)},0)}
+function editClient(id){modal("Modifica cliente",db.clients.find(c=>c.id===id),id)}
+function modal(title,c,id){document.getElementById("modal").classList.add("open");document.getElementById("sheet").innerHTML=`<h2>${title}</h2><div class="form">
+<input id="name" class="full" placeholder="Nome e cognome" value="${c.name||""}">
+<input id="email" placeholder="Email" value="${c.email||""}">
+<input id="plan" placeholder="Nome scheda" value="${c.plan||""}">
+<label class="muted">Inizio<input id="start" type="date" value="${c.start||""}"></label>
+<label class="muted">Fine<input id="end" type="date" value="${c.end||""}"></label></div>
+<div class="modal-actions"><button class="btn" onclick="closeModal()">Annulla</button><button class="btn primary" onclick="saveClient(${id})">Salva</button></div>`}
+function closeModal(){document.getElementById("modal").classList.remove("open")}
+function saveClient(id){let d={name:name.value.trim(),email:email.value.trim(),plan:plan.value.trim()||"Nuova scheda",start:start.value,end:end.value};if(!d.name||!d.start||!d.end)return alert("Inserisci nome, inizio e fine.");if(id)Object.assign(db.clients.find(c=>c.id===id),d);else{d.id=Date.now();d.days=[];db.clients.push(d)}save();closeModal();selected=id||d.id;view=id?"client":"dashboard";render();if(id)tab("plan")}
+function editPlan(id){let c=db.clients.find(x=>x.id===id);document.getElementById("modal").classList.add("open");document.getElementById("sheet").innerHTML=`<h2>Modifica scheda · ${c.name}</h2><p class="muted">In questa V1 puoi aggiornare nome e periodo della scheda. L'editor completo degli esercizi sarà il prossimo modulo.</p><div class="form"><input id="pn" class="full" value="${c.plan}"><label class="muted">Inizio<input id="ps" type="date" value="${c.start}"></label><label class="muted">Fine<input id="pe" type="date" value="${c.end}"></label></div><div class="modal-actions"><button class="btn" onclick="closeModal()">Annulla</button><button class="btn primary" onclick="savePlan(${id})">Salva scheda</button></div>`}
+function savePlan(id){let c=db.clients.find(x=>x.id===id);c.plan=pn.value.trim()||"Scheda";c.start=ps.value;c.end=pe.value;save();closeModal();render();tab("plan")}
+function render(){document.getElementById("main").innerHTML=view==="dashboard"?dashboard():clientPage(db.clients.find(c=>c.id===selected));document.getElementById("nav").innerHTML=`<button class="${view==="dashboard"?"on":""}" onclick="goDashboard()">🏠 Dashboard</button><button onclick="goDashboard();setTimeout(()=>document.getElementById('search')?.focus(),50)">👥 Clienti</button>`;if(view==="dashboard")renderClients()}
+document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal()});
+render();
+</script>
+</body>
+</html>
