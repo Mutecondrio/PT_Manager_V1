@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PT Manager V2</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f4f6fa;color:#172033}
+.wrap{min-height:100vh;display:grid;place-items:center;padding:20px}.box{width:min(430px,100%);background:white;border-radius:20px;padding:30px;box-shadow:0 12px 40px #0001}
+h1{margin:0 0 8px}.muted{color:#667085}.field{margin:16px 0}.field label{display:block;font-weight:700;font-size:14px;margin-bottom:7px}
+input{width:100%;padding:12px;border:1px solid #d0d5dd;border-radius:10px;font-size:16px}button{width:100%;padding:12px;border:0;border-radius:10px;background:#2563eb;color:white;font-weight:800;font-size:15px;cursor:pointer}
+.err{margin:12px 0;padding:11px;border-radius:10px;background:#fee4e2;color:#b42318}.ok{margin:12px 0;padding:11px;border-radius:10px;background:#dcfae6;color:#067647}
+.app{min-height:100vh}.top{height:68px;background:#111827;color:white;display:flex;align-items:center;justify-content:space-between;padding:0 24px}.top button{width:auto;background:#ffffff18;border:1px solid #ffffff33;padding:8px 12px}
+.layout{display:grid;grid-template-columns:220px 1fr}.side{background:#fff;border-right:1px solid #e5e7eb;min-height:calc(100vh - 68px);padding:18px}.side button{background:none;color:#344054;text-align:left;margin-bottom:6px}.side button.active{background:#eff6ff;color:#175cd3}
+main{padding:28px;max-width:1300px;width:100%;margin:auto}.head{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:22px}.head button{width:auto}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.stat,.card,.client{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px}.stat b{display:block;color:#667085;font-size:13px}.stat strong{font-size:30px;display:block;margin-top:6px}.card{margin-top:18px}.clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}.client{margin-top:0}.avatar{width:44px;height:44px;border-radius:12px;background:#dbeafe;color:#1d4ed8;display:grid;place-items:center;font-weight:900}.ctop{display:flex;gap:10px;align-items:center}.name{font-weight:850;font-size:18px}.badge{display:inline-block;margin-top:12px;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}.green{background:#dcfce7;color:#166534}.yellow{background:#fef3c7;color:#92400e}.red{background:#fee2e2;color:#991b1b}.gray{background:#f2f4f7;color:#475467}.actions{display:flex;gap:7px;margin-top:14px}.actions button{width:auto;font-size:13px;padding:8px 10px}.secondary{background:#eef4ff;color:#175cd3}.danger{background:#fee4e2;color:#b42318}.modal-backdrop{position:fixed;inset:0;background:#10182899;display:grid;place-items:center;padding:20px;z-index:100}.modal{width:min(620px,100%);background:#fff;border-radius:20px;padding:24px;box-shadow:0 20px 60px #0003}.modal h2{margin:0 0 6px}.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.modal-actions button{width:auto;min-width:110px}.modal-actions .secondary{background:#eef4ff;color:#175cd3}.modal textarea{width:100%;min-height:100px;padding:12px;border:1px solid #d0d5dd;border-radius:10px;font:inherit;resize:vertical}.required{color:#b42318}@media(max-width:600px){.modal-grid{grid-template-columns:1fr}}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.side{min-height:auto;border-right:0;border-bottom:1px solid #e5e7eb;display:flex;gap:6px;overflow:auto}.side button{width:auto;white-space:nowrap}.stats{grid-template-columns:1fr 1fr}main{padding:18px}.head{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div id="root"><div class="wrap"><div class="box"><h1>PT Manager <span style="color:#2563eb">V2</span></h1><p class="muted">Caricamento…</p></div></div></div>
+
+<script type="module">
+const root=document.getElementById('root');
+const URL_SUPABASE="https://rzfxqxmwcwxgagjfajbs.supabase.co";
+const KEY_SUPABASE="sb_publishable_6Cp0EMJl7cBG_ISCF73L8g_o72RCQTF";
+
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+function initials(n){return String(n||"?").split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase();}
+function dateIT(d){return d?new Date(d+"T00:00:00").toLocaleDateString("it-IT"):"—";}
+function status(p){
+ if(!p)return ["gray","Nessuna scheda"];
+ const days=Math.ceil((new Date(p.end_date+"T23:59:59")-new Date())/86400000);
+ if(days<0)return ["red","Scaduta"];
+ if(days<=7)return ["yellow","Scade tra "+days+" gg"];
+ return ["green","Attiva"];
+}
+
+let sb,session,profile,clients=[];
+
+function login(){
+root.innerHTML=`<div class="wrap"><div class="box">
+<h1>PT Manager <span style="color:#2563eb">V2</span></h1>
+<p class="muted">Accesso area professionista</p>
+<div id="msg"></div>
+<div class="field"><label>Email</label><input id="email" type="email" autocomplete="email"></div>
+<div class="field"><label>Password</label><input id="pass" type="password" autocomplete="current-password"></div>
+<button id="loginBtn">Accedi</button>
+<p class="muted" style="font-size:12px;margin-top:18px">Versione collegata a Supabase.</p>
+</div></div>`;
+document.getElementById("loginBtn").onclick=doLogin;
+}
+async function doLogin(){
+ const msg=document.getElementById("msg"),btn=document.getElementById("loginBtn");
+ btn.disabled=true;msg.innerHTML="<div class='ok'>Accesso in corso…</div>";
+ const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:pass.value});
+ if(error){
+   msg.innerHTML="<div class='err'>"+esc(error.message)+"</div>";
+   btn.disabled=false;
+   return;
+ }
+ session=data.session;
+ await loadUser();
+ btn.disabled=false;
+}
+async function start(){
+ try{
+   const mod=await import("https://esm.sh/@supabase/supabase-js@2");
+   sb=mod.createClient(URL_SUPABASE,KEY_SUPABASE);
+   const {data}=await sb.auth.getSession();
+   if(data.session){session=data.session;await loadUser();}else login();
+ }catch(e){
+   root.innerHTML=`<div class="wrap"><div class="box"><h1>PT Manager V2</h1>
+   <div class="err"><b>Errore di caricamento</b><br><br>${esc(e.message||e)}</div>
+   <p class="muted">Il browser non è riuscito a caricare la libreria necessaria. Ricarica la pagina. Se il problema resta, mandami questa schermata.</p></div></div>`;
+ }
+}
+async function loadUser(){
+ const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+ if(error){showError("Profilo non trovato: "+error.message);return}
+ profile=data;
+ if(profile.role!=="pt"){showError("Questo account non è configurato come PT.");return}
+ await loadClients();dashboard();
+}
+async function loadClients(){
+ const {data,error}=await sb.from("clients").select("*,plans(*)").eq("pt_id",session.user.id).order("full_name");
+ if(error){showError(error.message);return}
+ clients=(data||[]).map(c=>({...c,currentPlan:(c.plans||[]).sort((a,b)=>new Date(b.start_date)-new Date(a.start_date))[0]||null}));
+}
+function showError(m){root.innerHTML=`<div class="wrap"><div class="box"><h1>PT Manager V2</h1><div class="err">${esc(m)}</div><button onclick="location.reload()">Ricarica</button></div></div>`}
+function shell(content){
+root.innerHTML=`<div class="app"><header class="top"><b>PT Manager <span style="color:#60a5fa">V2</span></b><div>${esc(profile.full_name||session.user.email)} <button id="logout">Esci</button></div></header>
+<div class="layout"><aside class="side"><button class="active" id="dashNav">📊 Dashboard</button><button id="clientNav">👥 Clienti</button></aside><main id="main">${content}</main></div></div>`;
+document.getElementById("logout").onclick=async()=>{await sb.auth.signOut();location.reload()};
+document.getElementById("dashNav").onclick=dashboard;
+document.getElementById("clientNav").onclick=clientsPage;
+}
+function stats(){
+return `<div class="stats"><div class="stat"><b>CLIENTI</b><strong>${clients.length}</strong></div>
+<div class="stat"><b>SCHEDE ATTIVE</b><strong>${clients.filter(c=>status(c.currentPlan)[0]=="green").length}</strong></div>
+<div class="stat"><b>IN SCADENZA</b><strong>${clients.filter(c=>status(c.currentPlan)[0]=="yellow").length}</strong></div>
+<div class="stat"><b>SCADUTE</b><strong>${clients.filter(c=>status(c.currentPlan)[0]=="red").length}</strong></div></div>`;
+}
+function cards(list=clients){
+if(!list.length)return `<div class="card" style="text-align:center;color:#667085">Nessun cliente presente.</div>`;
+return `<div class="clients">${list.map(c=>{let s=status(c.currentPlan);return `<div class="client">
+<div class="ctop"><div class="avatar">${esc(initials(c.full_name))}</div><div><div class="name">${esc(c.full_name)}</div><div class="muted">${esc(c.email||"Nessuna email")}</div></div></div>
+<span class="badge ${s[0]}">${esc(s[1])}</span>
+<p class="muted" style="font-size:14px"><b>Scheda:</b> ${esc(c.currentPlan?.name||"Nessuna")}<br>${c.currentPlan?dateIT(c.currentPlan.start_date)+" → "+dateIT(c.currentPlan.end_date):""}</p>
+<div class="actions"><button class="secondary" onclick="openClient('${c.id}')">Apri</button></div>
+</div>`}).join("")}</div>`;
+}
+function dashboard(){
+shell(`<div class="head"><div><h1>Dashboard</h1><p class="muted">Panoramica del tuo studio.</p></div><button id="newClient">+ Nuovo cliente</button></div>${stats()}<div class="card"><h2>Clienti</h2>${cards()}</div>`);
+document.getElementById("newClient").onclick=newClient;
+}
+function clientsPage(){
+shell(`<div class="head"><div><h1>Clienti</h1><p class="muted">Gestisci i tuoi clienti.</p></div><button id="newClient">+ Nuovo cliente</button></div><div class="card"><input id="search" placeholder="Cerca cliente…" style="max-width:450px">${cards()}</div>`);
+document.getElementById("newClient").onclick=newClient;
+document.getElementById("search").oninput=e=>{const q=e.target.value.toLowerCase();document.querySelector(".clients")?.replaceWith(document.createRange().createContextualFragment(cards(clients.filter(c=>c.full_name.toLowerCase().includes(q)))));}
+}
+async function openClient(id){
+ const c=clients.find(x=>x.id===id);if(!c)return;
+ const p=c.currentPlan;
+ let exercises=[];
+ if(p){const r=await sb.from("plan_exercises").select("*").eq("plan_id",p.id).order("exercise_order");exercises=r.data||[];}
+ shell(`<div class="head"><div><button id="back" class="secondary">← Clienti</button><h1>${esc(c.full_name)}</h1><p class="muted">${esc(c.email||"")}</p></div></div>
+ <div class="card"><div class="head"><div><h2>${esc(p?.name||"Nessuna scheda")}</h2><p class="muted">${p?dateIT(p.start_date)+" → "+dateIT(p.end_date):"Crea la prima scheda."}</p></div><button id="newPlan">${p?"Modifica scheda":"+ Nuova scheda"}</button></div>
+ <h3>Esercizi</h3>${exercises.length?exercises.map(e=>`<p><b>${esc(e.exercise_name)}</b> — ${esc(e.day_name)} · ${e.sets??"—"} serie · ${esc(e.reps||"—")} reps</p>`).join(""):"<p class='muted'>Nessun esercizio inserito.</p>"}</div>`);
+ document.getElementById("back").onclick=clientsPage;
+ document.getElementById("newPlan").onclick=()=>planModal(c,p);
+}
+function closeModal(){document.getElementById("modalRoot")?.remove();}
+function newClient(){
+ document.body.insertAdjacentHTML("beforeend",`<div class="modal-backdrop" id="modalRoot">
+   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="newClientTitle">
+    <h2 id="newClientTitle">Nuovo cliente</h2>
+    <p class="muted" style="margin-top:0">Inserisci i dati del cliente. I campi contrassegnati con * sono obbligatori.</p>
+    <div id="clientMsg"></div>
+    <div class="modal-grid">
+      <div class="field"><label>Nome <span class="required">*</span></label><input id="clientFirst" autocomplete="given-name"></div>
+      <div class="field"><label>Cognome <span class="required">*</span></label><input id="clientLast" autocomplete="family-name"></div>
+      <div class="field"><label>Email</label><input id="clientEmail" type="email" autocomplete="email"></div>
+      <div class="field"><label>Telefono</label><input id="clientPhone" type="tel" autocomplete="tel"></div>
+      <div class="field"><label>Data di nascita</label><input id="clientBirth" type="date"></div>
+      <div class="field"><label>Stato</label><select id="clientStatus" style="width:100%;padding:12px;border:1px solid #d0d5dd;border-radius:10px;font-size:16px;background:white"><option value="active">Attivo</option><option value="suspended">Sospeso</option></select></div>
+    </div>
+    <div class="field"><label>Note</label><textarea id="clientNotes" placeholder="Eventuali note sul cliente..."></textarea></div>
+    <div class="modal-actions"><button id="cancelClient" class="secondary">Annulla</button><button id="saveClient">Salva cliente</button></div>
+   </div>
+  </div>`);
+ const modal=document.getElementById("modalRoot");
+ document.getElementById("cancelClient").onclick=closeModal;
+ modal.addEventListener("click",e=>{if(e.target===modal)closeModal();});
+ document.addEventListener("keydown",escModal);
+ document.getElementById("clientFirst").focus();
+ document.getElementById("saveClient").onclick=saveClient;
+}
+function escModal(e){if(e.key==="Escape"){closeModal();document.removeEventListener("keydown",escModal);}}
+async function saveClient(){
+ const first=document.getElementById("clientFirst").value.trim();
+ const last=document.getElementById("clientLast").value.trim();
+ const email=document.getElementById("clientEmail").value.trim();
+ const phone=document.getElementById("clientPhone").value.trim();
+ const birth=document.getElementById("clientBirth").value||null;
+ const statusValue=document.getElementById("clientStatus").value;
+ const notes=document.getElementById("clientNotes").value.trim();
+ const msg=document.getElementById("clientMsg");
+ const btn=document.getElementById("saveClient");
+ if(!first||!last){msg.innerHTML="<div class='err'>Inserisci almeno nome e cognome.</div>";return;}
+ btn.disabled=true;btn.textContent="Salvataggio…";
+ const payload={pt_id:session.user.id,full_name:`${first} ${last}`,email:email||null};
+ // Questi campi vengono salvati solo se esistono nello schema attuale.
+ // La V2 iniziale contiene sicuramente full_name ed email, quindi non blocchiamo il salvataggio.
+ const {data,error}=await sb.from("clients").insert(payload).select().single();
+ if(error){msg.innerHTML="<div class='err'>"+esc(error.message)+"</div>";btn.disabled=false;btn.textContent="Salva cliente";return;}
+ closeModal();document.removeEventListener("keydown",escModal);await loadClients();dashboard();
+}
+function planModal(c,p){
+ const name=prompt("Nome della scheda:",p?.name||"Scheda "+c.full_name);if(!name)return;
+ const start=prompt("Data inizio (YYYY-MM-DD):",p?.start_date||new Date().toISOString().slice(0,10));if(!start)return;
+ const end=prompt("Data fine (YYYY-MM-DD):",p?.end_date||new Date(Date.now()+30*86400000).toISOString().slice(0,10));if(!end)return;
+ const payload={client_id:c.id,name,start_date:start,end_date:end,description:null};
+ const q=p?sb.from("plans").update(payload).eq("id",p.id):sb.from("plans").insert(payload);
+ q.then(async r=>{if(r.error)alert(r.error.message);else{await loadClients();openClient(c.id);}});
+}
+start();
+</script>
+</body>
+</html>
